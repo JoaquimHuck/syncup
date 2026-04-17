@@ -1,0 +1,116 @@
+// SyncUp Prisma Schema
+// SQLite database for local development; swap provider to "postgresql" for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- User ----
+// Represents a SyncUp account holder who has connected their calendar
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  calendarProvider String?  // "google" | "microsoft" | "apple"
+  // Encrypted OAuth tokens (AES-256-GCM, stored as JSON string)
+  oauthTokens      String?
+  // JSON-serialized UserPreferences (timezone, working hours, buffer time, etc.)
+  preferences      String   @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  contacts         Contact[]     @relation("UserContacts")
+  meetings         Meeting[]     @relation("CreatedMeetings")
+  preferences_rel  Preference[]  @relation("UserPreferences")
+
+  @@map("users")
+}
+
+// ---- Contact ----
+// A person (cofounder / teammate) that the user can schedule meetings with.
+// May be linked to a SyncUp user if that person also uses the app.
+model Contact {
+  id               String   @id @default(uuid())
+  ownerId          String   // The User who added this contact
+  name             String
+  email            String
+  calendarProvider String?  // "google" | "microsoft" | "apple"
+  linkedUserId     String?  // FK to User if this contact has their own account
+  city             String?  // Physical city for in-person meeting detection
+  company          String?  // Auto-detected from email domain
+  isInternal       Boolean  @default(false) // Same email domain as owner
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  owner            User     @relation("UserContacts", fields: [ownerId], references: [id], onDelete: Cascade)
+  attendees        MeetingAttendee[]
+  preferences_rel  Preference[] @relation("ContactPreferences")
+
+  @@unique([ownerId, email])
+  @@map("contacts")
+}
+
+// ---- Meeting ----
+// A meeting created through SyncUp (or synced from external calendar)
+model Meeting {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  startTime    DateTime
+  endTime      DateTime
+  createdById  String
+  // Where the event was created: "syncup" | "google" | "microsoft" | "apple"
+  source       String   @default("syncup")
+  // External calendar event ID for sync
+  externalId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdBy    User              @relation("CreatedMeetings", fields: [createdById], references: [id])
+  attendees    MeetingAttendee[]
+
+  @@map("meetings")
+}
+
+// ---- MeetingAttendee ----
+// Join table between Meeting and Contact, with RSVP status
+model MeetingAttendee {
+  id             String  @id @default(uuid())
+  meetingId      String
+  contactId      String
+  // "accepted" | "declined" | "tentative" | "pending"
+  responseStatus String  @default("pending")
+
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  contact  Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, contactId])
+  @@map("meeting_attendees")
+}
+
+// ---- Preference ----
+// Learned scheduling preferences per user-contact pair.
+// Updated each time a meeting is created through SyncUp.
+model Preference {
+  id                String   @id @default(uuid())
+  userId            String
+  contactId         String
+  // JSON array of preferred time strings e.g. ["09:00", "14:30"]
+  preferredTimes    String   @default("[]")
+  avgDurationMinutes Float   @default(30)
+  // JSON array of preferred day numbers (0=Sun...6=Sat) e.g. [1, 3, 5]
+  preferredDays     String   @default("[]")
+  meetingCount      Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  user    User    @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact @relation("ContactPreferences", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+  @@map("preferences")
+}

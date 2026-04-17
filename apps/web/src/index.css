@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+  }
+
+  .dark {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --border: #334155;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply font-sans antialiased bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100;
+    margin: 0;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-600 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400 dark:bg-slate-500; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium
+           text-sm transition-all duration-150 focus:outline-none focus:ring-2
+           focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+  }
+
+  .btn-secondary {
+    @apply btn bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200
+           hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .card {
+    @apply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200
+           dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100
+           placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500
+           focus:border-transparent transition-colors;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1;
+  }
+
+  /* Chat message bubbles */
+  .chat-bubble-user {
+    @apply bg-brand-600 text-white rounded-2xl rounded-br-sm px-4 py-3 max-w-prose;
+  }
+
+  .chat-bubble-assistant {
+    @apply bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700
+           text-slate-900 dark:text-slate-100 rounded-2xl rounded-bl-sm px-4 py-3 max-w-prose;
+  }
+
+  /* Typing indicator animation */
+  .typing-dot {
+    @apply w-2 h-2 bg-slate-400 rounded-full animate-bounce;
+  }
+}
+
+/* Prose for AI responses */
+.ai-content p { @apply mb-3 last:mb-0; }
+.ai-content ul, .ai-content ol { @apply mb-3 pl-5 space-y-1; }
+.ai-content ul { @apply list-disc; }
+.ai-content ol { @apply list-decimal; }
+.ai-content li { @apply text-sm; }
+.ai-content strong { @apply font-semibold; }
+.ai-content code { @apply bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono; }
