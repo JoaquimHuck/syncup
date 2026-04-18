@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { contactsApi } from '../../services/api';
 import CalendarSection from './CalendarSection';
@@ -8,8 +7,7 @@ import PreferencesSection from './PreferencesSection';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
 export default function SettingsPage() {
-  const { setContacts, setUser } = useStore();
-  const navigate = useNavigate();
+  const { setContacts } = useStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,17 +15,11 @@ export default function SettingsPage() {
     contactsApi
       .list()
       .then((res) => setContacts(res.data))
-      .catch((err: Error) => {
-        if (err.message?.includes('401') || err.message?.toLowerCase().includes('auth')) {
-          // Session expired — send to login
-          setUser(null);
-          navigate('/login', { replace: true });
-        } else {
-          setError('Failed to load settings. Please refresh the page.');
-        }
+      .catch(() => {
+        setError('Failed to load contacts. Please refresh the page.');
       })
       .finally(() => setLoading(false));
-  }, [setContacts, setUser, navigate]);
+  }, [setContacts]);
 
   if (loading) {
     return (

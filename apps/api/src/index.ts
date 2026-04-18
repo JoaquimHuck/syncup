@@ -9,6 +9,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
+import connectPgSimple from 'connect-pg-simple';
 
 import { authRouter } from './routes/auth';
 import { calendarRouter } from './routes/calendar';
@@ -21,6 +22,9 @@ import { prisma } from './utils/db';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
+
+// Trust Railway's proxy so req.secure is correct (required for secure cookies)
+app.set('trust proxy', 1);
 
 // ---- Security middleware ----
 app.use(helmet());
@@ -47,8 +51,16 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ---- Sessions ----
+const PgSession = connectPgSimple(session);
 app.use(
   session({
+    store: process.env.DATABASE_URL
+      ? new PgSession({
+          conString: process.env.DATABASE_URL,
+          createTableIfMissing: true,
+          tableName: 'user_sessions',
+        })
+      : undefined, // falls back to MemoryStore in local dev without a DB
     secret: process.env.SESSION_SECRET ?? 'change-me-in-production',
     resave: false,
     saveUninitialized: false,
