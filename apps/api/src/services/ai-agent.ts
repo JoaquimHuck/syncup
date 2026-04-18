@@ -75,18 +75,33 @@ ${contactListLines}
 
 ## Your capabilities
 1. **Find meeting slots** — call \`find_slots\` when asked to schedule a meeting
-2. **Create meetings** — call \`create_meeting\` only after explicit user confirmation
+2. **Create meetings** — call \`create_meeting\` only after collecting ALL required info
 3. **Search meeting history** — call \`search_meetings\` when asked about past meetings
 
+## Meeting scheduling flow — follow this order every time
+1. User requests a meeting → call \`find_slots\` and present the best options
+2. User picks a time → ask: **"Will this meeting be online or in-person?"**
+3. If **online** → you will automatically generate a Google Meet link (no need to ask for anything)
+4. If **in-person** → ask: **"What's the address for the meeting?"**
+5. Ask: **"Would you like to add anyone else to this meeting?"**
+6. Confirm all details with the user: title, time, attendees, format/location
+7. Only after explicit confirmation → call \`create_meeting\` with format and location
+
+## After creating a meeting
+- If online: share the Google Meet link clearly, e.g. "📹 Google Meet: https://meet.google.com/xxx-xxxx-xxx"
+- If in-person: confirm the address, e.g. "📍 Meeting at 123 Main St, San Francisco"
+- Always confirm who the invites were sent to
+
 ## Instructions
-- Always confirm meeting details before creating: title, attendees, time slot
+- Always confirm meeting details before creating: title, attendees, time, AND format
 - Ask for a meeting title if not provided
 - If a contact has no connected calendar, mention it
 - Present slot options in a friendly format (e.g. "Tuesday, Jan 14 at 2:00 PM — 1 hour")
 - When suggesting slots, explain WHY each one is good based on scoring reasons
-- **Location awareness**: if all attendees share the same [City], suggest "This could be in-person". If cities differ or are missing, suggest "Online meeting recommended"
+- **Location awareness**: if all attendees share the same [City], lean towards suggesting in-person. If cities differ, suggest online.
 - **Internal vs External**: contacts tagged [Internal] share your company domain. Mention it when relevant (e.g. "This is an external meeting with Stripe")
-- NEVER create a meeting without explicit confirmation
+- NEVER call \`create_meeting\` without knowing the format (online/in-person)
+- NEVER create a meeting without explicit user confirmation
 - Match contact names from messages to the list above (fuzzy match is fine)`;
 }
 
@@ -141,7 +156,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'create_meeting',
     description:
-      'Create a calendar event and send invites. Only call this AFTER the user has confirmed the meeting details.',
+      'Create a calendar event and send invites. Only call this AFTER the user has confirmed ALL details: title, time, attendees, AND format (online/in-person).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -154,8 +169,17 @@ const TOOLS: Anthropic.Tool[] = [
           items: { type: 'string' },
           description: 'Email addresses of all attendees',
         },
+        format: {
+          type: 'string',
+          enum: ['online', 'in-person'],
+          description: 'Whether the meeting is online (Google Meet) or in-person',
+        },
+        location: {
+          type: 'string',
+          description: 'Physical address for in-person meetings. Omit for online meetings.',
+        },
       },
-      required: ['title', 'start_time', 'end_time', 'attendee_emails'],
+      required: ['title', 'start_time', 'end_time', 'attendee_emails', 'format'],
     },
   },
 ];
@@ -269,16 +293,19 @@ async function executeTool(
   }
 
   if (toolName === 'create_meeting') {
-    const { title, description, start_time, end_time, attendee_emails } = toolInput as {
+    const { title, description, start_time, end_time, attendee_emails, format, location } = toolInput as {
       title: string;
       description?: string;
       start_time: string;
       end_time: string;
       attendee_emails: string[];
+      format: 'online' | 'in-person';
+      location?: string;
     };
 
     // Create the event via the user's calendar provider
     let externalId: string | undefined;
+    let meetLink: string | undefined;
     if (user?.calendarProvider && user.oauthTokens) {
       const tokens = decryptJson<Record<string, unknown>>(user.oauthTokens);
       if (tokens) {
@@ -291,8 +318,11 @@ async function executeTool(
               endTime: end_time,
               attendeeEmails: attendee_emails,
               timezone: userPrefs.timezone ?? 'UTC',
+              format,
+              location,
             });
             externalId = result.eventId;
+            meetLink = result.meetLink;
           } else if (user.calendarProvider === 'microsoft') {
             const result = await createMicrosoftEvent(tokens as unknown as MicrosoftTokens, {
               title,
@@ -352,11 +382,18 @@ async function executeTool(
       await updatePreferences(userId, contact.id, new Date(start_time), new Date(end_time));
     }
 
+    const locationDetail = format === 'online'
+      ? (meetLink ? `Google Meet: ${meetLink}` : 'Online (Meet link will appear in the calendar invite)')
+      : (location ? `In-person at ${location}` : 'In-person');
+
     return JSON.stringify({
       success: true,
       meeting_id: meeting.id,
       calendar_created: !!externalId,
-      message: `Meeting "${title}" created successfully${externalId ? ' and added to your calendar' : ''}. Invites sent to: ${attendee_emails.join(', ')}`,
+      format,
+      meet_link: meetLink ?? null,
+      location: location ?? null,
+      message: `Meeting "${title}" created successfully${externalId ? ' and added to your calendar' : ''}. ${locationDetail}. Invites sent to: ${attendee_emails.join(', ')}`,
     });
   }
 

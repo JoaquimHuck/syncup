@@ -170,7 +170,8 @@ export async function deleteCalendarEvent(
 
 /**
  * Create a calendar event on the user's primary Google Calendar.
- * Returns the event ID for future reference.
+ * Supports Google Meet link generation (format: 'online') and physical location (format: 'in-person').
+ * Returns the event ID, calendar link, and Meet link (if online).
  */
 export async function createCalendarEvent(
   tokens: GoogleTokens,
@@ -181,12 +182,15 @@ export async function createCalendarEvent(
     endTime: string;
     attendeeEmails: string[];
     timezone?: string;
+    format?: 'online' | 'in-person';
+    location?: string; // physical address for in-person meetings
   },
-): Promise<{ eventId: string; htmlLink: string }> {
+): Promise<{ eventId: string; htmlLink: string; meetLink?: string }> {
   const { client } = await getAuthenticatedClient(tokens);
   const cal = google.calendar({ version: 'v3', auth: client });
 
   const tzid = event.timezone ?? 'UTC';
+  const isOnline = event.format === 'online';
 
   const requestBody: calendar_v3.Schema$Event = {
     summary: event.title,
@@ -194,19 +198,33 @@ export async function createCalendarEvent(
     start: { dateTime: event.startTime, timeZone: tzid },
     end: { dateTime: event.endTime, timeZone: tzid },
     attendees: event.attendeeEmails.map((email) => ({ email })),
-    reminders: {
-      useDefault: true,
-    },
+    reminders: { useDefault: true },
+    ...(event.location && { location: event.location }),
+    ...(isOnline && {
+      conferenceData: {
+        createRequest: {
+          requestId: `syncup-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      },
+    }),
   };
 
   const created = await cal.events.insert({
     calendarId: 'primary',
     requestBody,
-    sendUpdates: 'all', // sends email invites to attendees
+    // Required for Google Meet link generation
+    conferenceDataVersion: isOnline ? 1 : 0,
+    sendUpdates: 'all',
   });
+
+  const meetLink = created.data.hangoutLink
+    ?? created.data.conferenceData?.entryPoints?.find((ep) => ep.entryPointType === 'video')?.uri
+    ?? undefined;
 
   return {
     eventId: created.data.id ?? '',
     htmlLink: created.data.htmlLink ?? '',
+    ...(meetLink && { meetLink }),
   };
 }
